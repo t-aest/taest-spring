@@ -1,11 +1,15 @@
 package com.taest.v2.spring.framework.aop.support;
 
-import com.taest.v2.spring.framework.aop.aspect.TTAdvice;
+import com.taest.v2.spring.framework.aop.aspect.TTAfterReturningAdviceInterceptor;
+import com.taest.v2.spring.framework.aop.aspect.TTAspectJAfterThrowingAdvice;
+import com.taest.v2.spring.framework.aop.aspect.TTMethodBeforeAdviceInterceptor;
 import com.taest.v2.spring.framework.aop.config.TTAopConfig;
 import lombok.Data;
 
 import java.lang.reflect.Method;
 import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -19,7 +23,7 @@ public class TTAdvisedSupport {
 
     private Pattern pointCutClassPattern;
 
-    private Map<Method,Map<String,TTAdvice>> methodCache;
+    private Map<Method, List<Object>> methodCache;
 
 
     public TTAdvisedSupport(TTAopConfig config) {
@@ -45,7 +49,7 @@ public class TTAdvisedSupport {
         String pointCutForClassRegex = pointCut.substring(0, pointCut.lastIndexOf("\\(") - 4);
         pointCutClassPattern = Pattern.compile("class " + pointCutForClassRegex.substring(pointCutForClassRegex.lastIndexOf(" ") + 1));
 
-        methodCache = new HashMap<Method, Map<String, TTAdvice>>();
+        methodCache = new HashMap<Method, List<Object>>();
 
         //匹配方法的正则
         Pattern pointCutPattern = Pattern.compile(pointCut);
@@ -63,17 +67,17 @@ public class TTAdvisedSupport {
                 }
                 Matcher matcher = pointCutPattern.matcher(m);
                 if (matcher.matches()){
-                    Map<String,TTAdvice> advices = new HashMap<String, TTAdvice>();
+                    List<Object> advices = new LinkedList<Object>();
                     if (!(null == config.getAspectBefore() || "".equals(config.getAspectBefore()))){
-                        advices.put("before",new TTAdvice(aspectClass.newInstance(),aspectMethods.get(config.getAspectBefore())));
+                        advices.add(new TTMethodBeforeAdviceInterceptor(aspectClass.newInstance(),aspectMethods.get(config.getAspectBefore())));
                     }
                     if (!(null == config.getAspectAfter() || "".equals(config.getAspectAfter()))){
-                        advices.put("after",new TTAdvice(aspectClass.newInstance(),aspectMethods.get(config.getAspectAfter())));
+                        advices.add(new TTAfterReturningAdviceInterceptor(aspectClass.newInstance(),aspectMethods.get(config.getAspectAfter())));
                     }
                     if (!(null == config.getAspectAfterThrow() || "".equals(config.getAspectAfterThrow()))){
-                        TTAdvice ttAdvice = new TTAdvice(aspectClass.newInstance(), aspectMethods.get(config.getAspectAfterThrow()));
-                        ttAdvice.setThrowName(config.getAspectAfterThrowingName());
-                        advices.put("afterThrow",ttAdvice);
+                        TTAspectJAfterThrowingAdvice advice = new TTAspectJAfterThrowingAdvice(aspectClass.newInstance(),aspectMethods.get(config.getAspectAfterThrow()));
+                        advices.add(advice);
+                        advice.setThrowName(config.getAspectAfterThrowingName());
                     }
 
                     //跟目标代理类的业务方法和Advices建立一对多关系 便于在Proxy类中获取
@@ -92,18 +96,22 @@ public class TTAdvisedSupport {
     /**
      * 根据一个目标代理类去获取对应的通知
      * @param method
-     * @param o
+     * @param targetClass
      * @return
      * @throws Exception
      */
-    public Map<String, TTAdvice> getAdvices(Method method, Object o) throws Exception {
-        Map<String, TTAdvice> cache = methodCache.get(method);
-        if (null == cache){
-            Method m = targetClass.getMethod(method.getName(), method.getParameterTypes());
-            cache = methodCache.get(m);
-            this.methodCache.put(m,cache);
+    public List<Object> getInterceptorsAndDynamicInterceptionAdvice(Method method, Class<?> targetClass) throws Exception {
+
+        // 从缓存中获取
+        List<Object> cached = this.methodCache.get(method);
+        // 缓存未命中，则进行下一步处理
+        if (cached == null) {
+            Method m = targetClass.getMethod(method.getName(),method.getParameterTypes());
+            cached = this.methodCache.get(m);
+            // 存入缓存
+            this.methodCache.put(m, cached);
         }
-        return cache;
+        return cached;
     }
 
     /**

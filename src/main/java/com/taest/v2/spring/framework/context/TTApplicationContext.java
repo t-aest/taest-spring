@@ -3,12 +3,13 @@ package com.taest.v2.spring.framework.context;
 import com.taest.v2.spring.framework.annotation.TTAutowired;
 import com.taest.v2.spring.framework.annotation.TTController;
 import com.taest.v2.spring.framework.annotation.TTService;
-import com.taest.v2.spring.framework.aop.TTJdkDynamicAopProxy;
+import com.taest.v2.spring.framework.aop.TTDefaultAopProxyFactory;
 import com.taest.v2.spring.framework.aop.config.TTAopConfig;
 import com.taest.v2.spring.framework.aop.support.TTAdvisedSupport;
 import com.taest.v2.spring.framework.beans.TTBeanWrapper;
 import com.taest.v2.spring.framework.beans.config.TTBeanDefinition;
 import com.taest.v2.spring.framework.beans.support.TTBeanDefinitionReader;
+import com.taest.v2.spring.framework.core.TTBeanFactory;
 
 import java.lang.reflect.Field;
 import java.util.HashMap;
@@ -19,7 +20,7 @@ import java.util.Properties;
 /**
  * 完成bean的创建和依赖注入
  */
-public class TTApplicationContext {
+public class TTApplicationContext implements TTBeanFactory {
 //    private String[] configLocations;
 
     private TTBeanDefinitionReader reader;
@@ -29,6 +30,8 @@ public class TTApplicationContext {
     private Map<String, Object> factoryBeanObjectCache = new HashMap<String, Object>();
 
     private Map<String, TTBeanDefinition> beanDefinitionMap = new HashMap<String, TTBeanDefinition>();
+
+    private TTDefaultAopProxyFactory proxyFactory = new TTDefaultAopProxyFactory();
 
     public TTApplicationContext(String... configLocations) {
 //        this.configLocations = configLocations;
@@ -156,7 +159,7 @@ public class TTApplicationContext {
                 //判断是否需要生成代理类，如果需要就覆盖原生对象  否则不处理返回原生对象
 
                 if (config.pointCutMatch()){
-                    instance = new TTJdkDynamicAopProxy(config).getProxy();
+                    instance = proxyFactory.createAopProxy(config).getProxy();
                 }
 
                 this.factoryBeanObjectCache.put(beanName, instance);
